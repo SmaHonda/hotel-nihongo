@@ -396,7 +396,7 @@
                 // ======= 🔗 Google Sheets API 設定 =======
                 // 將 Apps Script 部署後的 Web App URL 貼在這裡
                 // 留空字串時自動使用下方寫死的 fallback 資料
-                const SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbwfz0yV5EImrChZ5mERx3VxrFZgMce2MAduBspQpnkLE9ggZEC40JCbS1ajcw6prm_h6w/exec';
+                const SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxzRgLbhlWt85II-0iGX5uKsssIppjRBqu1jaFLVPd_AzRctfOB3ZFDFpYocWk7NbO0/exec';
 
                 const isLoading = ref(false);
                 const loadError = ref('');
@@ -694,15 +694,32 @@
                 };
 
                 // ======= 📡 Google Sheets 資料載入 =======
+                // JSONP 載入（繞過 Safari 的 CORS / redirect 問題）
+                const fetchJSONP = (url) => new Promise((resolve, reject) => {
+                    const cbName = '_sheetsCallback_' + Date.now();
+                    const script = document.createElement('script');
+                    const timer = setTimeout(() => {
+                        cleanup();
+                        reject(new Error('Timeout'));
+                    }, 10000);
+                    const cleanup = () => {
+                        clearTimeout(timer);
+                        delete window[cbName];
+                        script.remove();
+                    };
+                    window[cbName] = (data) => { cleanup(); resolve(data); };
+                    script.onerror = () => { cleanup(); reject(new Error('Script load failed')); };
+                    script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${cbName}`;
+                    document.head.appendChild(script);
+                });
+
                 const loadFromSheets = async () => {
                     if (!SHEETS_API_URL) return; // 沒填 URL 就用寫死資料
 
                     isLoading.value = true;
                     loadError.value = '';
                     try {
-                        const res = await fetch(SHEETS_API_URL);
-                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                        const data = await res.json();
+                        const data = await fetchJSONP(SHEETS_API_URL);
 
                         // ── departments ──
                         if (data.departments?.length) {
