@@ -1,0 +1,17 @@
+{
+  "short_name": "日語冒險",
+  "name": "日語職涯冒險譚",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/197/197604.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "index.html",
+  "background_color": "#f5efe6",
+  "theme-color": "#a67c52",
+  "display": "standalone",
+  "orientation": "portrait"
+}
