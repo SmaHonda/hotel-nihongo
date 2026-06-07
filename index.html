@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日語職涯冒險譚：聲感修煉</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#f5efe6">
+    <style>
+        .blur-text {
+            filter: blur(5px);
+            transition: filter 0.3s ease;
+            user-select: none;
+        }
+        .blur-text:hover, .revealed {
+            filter: blur(0px);
+            user-select: auto;
+        }
+
+        /* ==================== 振假名完美導正不擠壓排版 ==================== */
+        ruby {
+            display: inline-ruby !important;
+            ruby-position: over !important;
+            ruby-align: center !important;
+        }
+
+        rt {
+            display: ruby-text !important;
+            font-size: 0.55em !important; 
+            color: #8c7e6c !important;
+            font-weight: bold !important;
+            white-space: nowrap !important;
+            text-align: center !important;
+        }
+    </style>
+</head>
+<body class="bg-[#f5efe6] text-[#3e342f] font-sans antialiased min-h-screen pb-24">
+
+    <div id="app" class="max-w-md mx-auto px-4 pt-4">
+
+        <!-- 載入中遮罩 -->
+        <div v-if="isLoading" class="fixed inset-0 z-[80] bg-[#f5efe6]/90 flex flex-col items-center justify-center gap-4">
+            <div class="w-12 h-12 border-4 border-[#e4d9c7] border-t-[#a67c52] rounded-full animate-spin"></div>
+            <p class="text-sm font-bold text-[#a67c52]">正在從雲端載入最新資料…</p>
+        </div>
+
+        <!-- 載入失敗提示 -->
+        <div v-if="loadError" class="bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs font-bold px-4 py-2.5 rounded-xl mb-3 flex items-center gap-2">
+            <span>⚠️</span><span>{{ loadError }}</span>
+        </div>
+        
+        <header class="bg-white p-4 rounded-2xl shadow-sm border border-[#e4d9c7] mb-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-[#e8dec9] rounded-xl border-2 border-[#a67c52] overflow-hidden shadow-inner flex items-center justify-center">
+                        <img src="assets/hero-avatar.png" alt="主角" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/100?text=HERO'">
+                    </div>
+                    <div>
+                        <h1 class="text-base font-bold tracking-wide">聲感冒險者</h1>
+                        <p class="text-xs text-[#a67c52] font-semibold">職涯 EXP. {{ totalExp }}</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-200">
+                    <img src="assets/streak-fire.png" alt="火焰" class="w-5 h-5" onerror="this.src='https://placehold.co/20?text=🔥'">
+                    <span class="text-sm font-black text-orange-600">{{ streakDays }} DAYS</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 pt-1 border-t border-gray-100">
+                <div class="w-1/2 space-y-0.5">
+                    <div class="flex justify-between text-[10px] font-bold text-gray-400">
+                        <span>冒險總進度</span>
+                        <span>{{ overallProgress }}%</span>
+                    </div>
+                    <div class="w-full bg-[#f0e6d2] h-2 rounded-full overflow-hidden">
+                        <div class="bg-[#a67c52] h-full transition-all duration-500" :style="{ width: overallProgress + '%' }"></div>
+                    </div>
+                </div>
+                <div class="w-1/2 flex flex-col items-end">
+                    <span class="text-[9px] font-bold text-gray-400 mb-1">修煉語速調校</span>
+                    <select v-model="speechRate" class="text-xs font-bold bg-[#fdfbf7] border border-[#e4d9c7] rounded-md p-1 text-[#a67c52] focus:outline-none">
+                        <option :value="0.75">0.75x 實習生慢速</option>
+                        <option :value="1.0">1.0x 正職員工速</option>
+                        <option :value="1.25">1.25x 魔鬼主管速</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <main v-if="currentTab === 'templates'" class="space-y-4">
+            <div class="flex justify-between items-center px-1">
+                <h2 class="text-sm font-bold text-gray-500 tracking-wider">萬用句型裝備</h2>
+                <span class="text-xs text-gray-400">連動更換裝備可發動發音</span>
+            </div>
+            
+            <div v-for="tpl in templates" :key="tpl.id" class="bg-white p-5 rounded-2xl shadow-sm border border-[#e4d9c7] space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="bg-[#ecd0b3] text-[#6d4c41] text-xs px-2.5 py-1 rounded-md font-bold">
+                        {{ tpl.category }}
+                    </span>
+                    <div class="flex items-center gap-3">
+                        <button @click="speak(pureSentenceText(tpl))" class="p-1.5 bg-[#fdfbf7] hover:bg-[#ebdcc5] border border-[#e4d9c7] rounded-lg transition active:scale-95">
+                            <img src="assets/icon-audio.png" alt="播放" class="w-4 h-4" onerror="this.src='https://placehold.co/15?text=🔊'">
+                        </button>
+                        <button @click="speak(pureSentenceText(tpl)); setTimeout(() => startShadowing(pureSentenceText(tpl)), 2200)" class="p-1.5 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition active:scale-95" title="跟讀評分">
+                            <span class="text-sm">🎤</span>
+                        </button>
+                        <div class="flex gap-0.5">
+                            <img v-for="n in 3" :key="n" :src="n <= tpl.stars ? 'assets/star-filled.png' : 'assets/star-empty.png'" alt="星" class="w-3.5 h-3.5" onerror="this.src='https://placehold.co/12?text=★'">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="space-y-2 pt-1">
+                    <p class="text-xl font-medium tracking-wide text-gray-800 leading-relaxed" v-html="renderSentence(tpl)"></p>
+                    <p class="text-xs text-gray-400 font-medium tracking-wide">{{ renderTranslation(tpl) }}</p>
+                </div>
+
+                <div class="flex items-center gap-2 bg-[#fdfbf7] p-2.5 rounded-xl border border-dashed border-[#dcd1be]">
+                    <img src="assets/icon-switch.png" alt="切換" class="w-4 h-4" onerror="this.src='https://placehold.co/15?text=🔄'">
+                    <select v-model="selectedWords[tpl.wordGroup]" class="w-full bg-transparent font-bold focus:outline-none text-sm text-[#a67c52]">
+                        <option v-for="word in getWordsByGroup(tpl.wordGroup)" :key="word.id" :value="word">
+                            {{ word.kanji.replace(/\|/g, '') }} — {{ word.chinese }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+        </main>
+
+        <main v-if="currentTab === 'dialogue'" class="space-y-4">
+            <div v-if="!inDialogueSession" class="space-y-4">
+                <h2 class="text-sm font-bold text-gray-500 tracking-wider px-1">選擇盲聽冒險模式</h2>
+                
+                <button @click="startRandomDialogue" class="w-full bg-gradient-to-r from-[#a67c52] to-[#cda274] text-white p-5 rounded-2xl shadow-md border border-[#8e6640] text-left relative overflow-hidden group active:scale-[0.99] transition">
+                    <div class="relative z-10 space-y-1">
+                        <span class="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded font-black tracking-wider">RANDOM</span>
+                        <h3 class="font-black text-lg">🎲 全職涯隨機綜合盲測</h3>
+                        <p class="text-xs text-white/80">混合所有部門突發狀況，考驗你的即時無提示聽力反應！</p>
+                    </div>
+                    <div class="absolute right-4 bottom-4 opacity-10 text-6xl font-black group-hover:scale-110 transition">❓</div>
+                </button>
+
+                <div class="border-t border-[#e4d9c7] my-2"></div>
+                <p class="text-xs font-bold text-gray-400 px-1">🎯 指定部門特訓關卡</p>
+
+                <div class="grid grid-cols-1 gap-2.5">
+                    <div v-for="type in dialogueCategories" :key="type.id" @click="startTargetedDialogue(type.id, type.name)" class="bg-white p-4 rounded-xl border border-[#e4d9c7] shadow-sm flex items-center justify-between cursor-pointer hover:bg-[#fffcf7] transition">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-[#f3ece0] rounded-lg flex items-center justify-center font-bold text-lg text-[#a67c52]">{{ type.icon }}</div>
+                            <div>
+                                <h4 class="font-bold text-sm text-gray-800">{{ type.name }}特訓</h4>
+                                <p class="text-[11px] text-gray-400">專攻該場景的職場聽力應對</p>
+                            </div>
+                        </div>
+                        <span class="text-xs font-bold text-[#a67c52]">進入 ➔</span>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else class="space-y-4">
+                <button @click="exitDialogueSession" class="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-[#a67c52] px-1">
+                    <img src="assets/icon-back.png" class="w-3 h-3 opacity-60" onerror="this.src='https://placehold.co/10?text=←'"> 放棄挑戰，返回大廳
+                </button>
+
+                <div class="flex justify-between items-center px-1">
+                    <span class="bg-[#a67c52] text-white text-[10px] font-black px-2.5 py-0.5 rounded">{{ currentModeTitle }}</span>
+                    <button @click="revealText = !revealText" class="text-[10px] font-bold text-[#a67c52] underline">
+                        {{ revealText ? '隱藏日文字幕' : '解除煙霧看提示' }}
+                    </button>
+                </div>
+                
+                <div class="bg-[#faf7f2] border border-[#e4d9c7] rounded-2xl p-4 h-64 overflow-y-auto space-y-4 flex flex-col shadow-inner">
+                    <div v-for="(msg, idx) in dialogueHistory" :key="idx" 
+                         :class="['max-w-[85%] p-3.5 rounded-xl text-sm font-medium transition-all leading-loose', msg.isPlayer ? 'bg-[#ebd3b4] self-end rounded-tr-none' : 'bg-white self-start rounded-tl-none border border-[#e9dfce]']">
+                        <p class="font-bold text-[10px] text-gray-400 mb-1">{{ msg.speaker }}</p>
+                        
+                        <p :class="['text-gray-800 tracking-wide', (!msg.isPlayer && !revealText && idx===0) ? 'blur-text' : '']"
+                           v-html="parseRuby(msg.text)"></p>
+                           
+                        <p v-if="revealText || msg.isPlayer || idx > 0" class="text-xs text-gray-400 mt-2 border-t border-black/5 pt-1">
+                            {{ msg.translation }}
+                        </p>
+                    </div>
+                </div>
+
+                <div v-if="currentScenario" class="bg-white p-4 rounded-2xl border border-[#e4d9c7] flex justify-between items-center shadow-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-[#f3ece0] rounded-xl overflow-hidden border border-[#dcd1be]">
+                            <img :src="'assets/npc-' + currentScenario.id + '.png'" alt="NPC" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/50?text=NPC'">
+                        </div>
+                        <div>
+                            <p class="font-bold text-sm">{{ currentScenario.speaker }}</p>
+                            <p class="text-xs text-gray-400">情境：{{ currentScenario.category }}</p>
+                        </div>
+                    </div>
+                    <button @click="speak(cleanTextForAudio(currentScenario.prompt))" class="flex items-center gap-1.5 px-3 py-2 bg-red-50 border border-red-200 text-red-600 rounded-xl font-bold text-xs hover:bg-red-100 transition">
+                        <img src="assets/icon-audio-red.png" class="w-3.5 h-3.5" onerror="this.src='https://placehold.co/12?text=🔊'"> 聆聽音聲
+                    </button>
+                </div>
+
+                <div v-if="currentScenario && !dialogueFinished" class="space-y-2">
+                    <button v-for="(opt, idx) in currentScenario.options" :key="idx" @click="submitAnswer(idx)"
+                            class="w-full text-left bg-white p-3.5 rounded-xl border border-[#e4d9c7] hover:bg-[#fffcf7] transition font-bold text-xs text-gray-700 shadow-sm flex justify-between items-center group leading-relaxed">
+                        <span v-html="parseRuby(opt.text)"></span>
+                        <img src="assets/icon-arrow.png" alt="前進" class="w-3 h-3 opacity-30 group-hover:opacity-100 pl-1" onerror="this.src='https://placehold.co/10?text=>'">
+                    </button>
+                </div>
+
+                <div v-if="dialogueFinished" class="bg-white p-4 rounded-2xl border-2 border-[#a67c52] text-center space-y-3">
+                    <p class="font-black text-[#a67c52] text-sm">應對考驗完畢！</p>
+                    <div class="flex justify-center gap-1">
+                        <img v-for="n in 3" :key="n" :src="n <= earnedStars ? 'assets/star-filled.png' : 'assets/star-empty.png'" alt="星" class="w-7 h-7" onerror="this.src='https://placehold.co/25?text=★'">
+                    </div>
+                    <button v-if="currentScenario" @click="speak(cleanTextForAudio(currentScenario.options.find(o=>o.isCorrect).text)); setTimeout(() => startShadowing(cleanTextForAudio(currentScenario.options.find(o=>o.isCorrect).text)), 3500)"
+                            class="w-full py-2.5 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
+                        🎤 跟讀正確答案練習
+                    </button>
+                    <button @click="exitDialogueSession" class="w-full py-2.5 bg-[#a67c52] text-white rounded-xl text-xs font-bold transition">返回冒險大廳</button>
+                </div>
+            </div>
+        </main>
+
+        <main v-if="currentTab === 'vocab'" class="space-y-4">
+            <div v-if="!activeDept" class="space-y-4">
+                <h2 class="text-sm font-bold text-gray-500 tracking-wider px-1">選擇你要探索的部門</h2>
+                <div class="grid grid-cols-1 gap-3">
+                    <div v-for="dept in departmentBadges" :key="dept.id" @click="enterDepartment(dept)" class="bg-white p-4 rounded-2xl border border-[#e4d9c7] shadow-sm flex items-center justify-between cursor-pointer hover:bg-[#fffcf7] transition-all">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 bg-[#f3ece0] rounded-xl border border-[#dcd1be] flex items-center justify-center p-2">
+                                <img :src="'assets/badge-' + dept.id + '.png'" :alt="dept.name" class="w-full h-full object-contain" onerror="this.src='https://placehold.co/40?text=Badge'">
+                            </div>
+                            <div>
+                                <h3 class="font-black text-base text-gray-800">{{ dept.name }}</h3>
+                                <p class="text-xs text-gray-400 mt-0.5">階級：{{ getDeptRankName(dept.id) }}</p>
+                            </div>
+                        </div>
+                        <span class="text-xs font-bold text-[#a67c52] bg-[#fdfbf7] border border-[#e4d9c7] px-3 py-1 rounded-full">探索 ➔</span>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else class="space-y-4">
+                <button @click="activeDept = null" class="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-[#a67c52] px-1">
+                    <img src="assets/icon-back.png" class="w-3 h-3 opacity-60" onerror="this.src='https://placehold.co/10?text=←'"> 返回大廳
+                </button>
+
+                <div class="bg-white p-4 rounded-2xl border border-[#e4d9c7] shadow-sm space-y-2">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-base font-black text-gray-800">{{ activeDept.name }}</h2>
+                        <button @click="startAudioQuiz" class="px-2.5 py-1 bg-purple-50 border border-purple-200 rounded-lg text-[10px] font-black text-purple-700 transition">⚡ 開啟單字爆破盲聽賽</button>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[10px] font-bold text-gray-400">
+                            <span>字彙熟練進度</span><span>{{ getDeptProgress(activeDept.id) }}%</span>
+                        </div>
+                        <div class="w-full bg-[#f0e6d2] h-2 rounded-full overflow-hidden">
+                            <div class="bg-[#a67c52] h-full transition-all" :style="{ width: getDeptProgress(activeDept.id) + '%' }"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-1.5 bg-[#ebdcc5]/40 p-1 rounded-xl border border-[#e4d9c7]">
+                    <button v-for="level in ['初心者', '中階', '進階']" :key="level" @click="currentLevelTab = level" :class="['py-2 text-xs font-black rounded-lg transition-all', currentLevelTab === level ? 'bg-white text-[#a67c52] shadow-sm' : 'text-gray-500']">
+                        {{ level }}
+                    </button>
+                </div>
+
+                <div class="space-y-2">
+                    <div v-for="w in filteredVocabByLevel" :key="w.id" class="bg-white rounded-xl border border-[#e4d9c7] shadow-sm p-3.5 flex justify-between items-center">
+                        <div @click="w.flipped = !w.flipped" class="cursor-pointer flex-1 py-1">
+                            <div v-if="!w.flipped">
+                                <span v-html="parseRuby(w.kanji + '[' + w.kana + ']')"></span>
+                            </div>
+                            <div v-else>
+                                <p class="text-[9px] text-[#a67c52] font-bold">中文意思</p>
+                                <p class="text-sm font-black text-gray-700">{{ w.chinese }}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 border-l border-gray-100 pl-3 shrink-0">
+                            <button @click.stop="playWordSound(w)" class="p-2 bg-gray-50 border border-gray-200 rounded-lg transition">
+                                <img src="assets/icon-audio.png" class="w-3.5 h-3.5" onerror="this.src='https://placehold.co/12?text=🔊'">
+                            </button>
+                            <div class="text-right space-y-0.5 min-w-[55px]">
+                                <p class="text-[9px] text-gray-400 font-bold">{{ w.studyCount }}回</p>
+                                <span class="inline-block px-1.5 py-0.5 rounded text-[8px] font-black" :class="getMasteryStyle(w.mastery)">{{ w.mastery }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 文法學習彈出視窗 -->
+        <div v-if="showGrammar" class="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" @click="showGrammar = null">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" @click.stop>
+                <h3 class="font-black text-[#a67c52] text-lg mb-2">{{ showGrammar.title }}</h3>
+                <p class="text-xs text-gray-500 font-bold mb-4">{{ showGrammar.usage }}</p>
+                <p class="text-sm text-gray-700 leading-relaxed mb-4">{{ showGrammar.explanation }}</p>
+                <div class="bg-[#f5efe6] p-3 rounded-lg text-sm italic text-gray-600">
+                    {{ showGrammar.example }}
+                </div>
+                <button @click="showGrammar = null" class="w-full mt-6 py-2 bg-[#a67c52] text-white rounded-xl font-bold text-sm">
+                    了解了
+                </button>
+            </div>
+        </div>
+
+        <!-- 🎤 跟讀錄音中提示 -->
+        <div v-if="shadowingState === 'listening'" class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl p-8 w-full max-w-xs shadow-2xl text-center space-y-4">
+                <div class="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                    <span class="text-3xl">🎤</span>
+                </div>
+                <p class="font-black text-gray-800">請跟著唸出來</p>
+                <p class="text-xs text-gray-500 bg-gray-50 rounded-lg p-3 leading-relaxed">{{ shadowingTarget }}</p>
+                <p class="text-[10px] text-red-400 font-bold animate-pulse">● 錄音中…</p>
+            </div>
+        </div>
+
+        <!-- 🎤 跟讀評分結果 -->
+        <div v-if="shadowingState === 'result'" class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4" @click="shadowingState = 'idle'">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4" @click.stop>
+                <div class="text-center">
+                    <p class="text-4xl font-black mb-1"
+                       :class="shadowingScore >= 80 ? 'text-green-500' : shadowingScore >= 50 ? 'text-yellow-500' : 'text-red-400'">
+                        {{ shadowingScore }}分
+                    </p>
+                    <p class="text-sm font-bold text-gray-500">
+                        {{ shadowingScore >= 80 ? '🎉 完美！發音很標準！' : shadowingScore >= 50 ? '👍 不錯！再練一次更好！' : '💪 繼續練習，你可以的！' }}
+                    </p>
+                </div>
+                <div class="space-y-2">
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="text-[9px] font-bold text-gray-400 mb-1">目標句子</p>
+                        <p class="text-xs text-gray-700">{{ shadowingTarget }}</p>
+                    </div>
+                    <div class="bg-blue-50 rounded-lg p-3">
+                        <p class="text-[9px] font-bold text-blue-400 mb-1">你說的</p>
+                        <p class="text-xs text-blue-700">{{ shadowingResult || '（未偵測到聲音）' }}</p>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-700"
+                         :class="shadowingScore >= 80 ? 'bg-green-400' : shadowingScore >= 50 ? 'bg-yellow-400' : 'bg-red-400'"
+                         :style="{ width: shadowingScore + '%' }"></div>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="startShadowing(shadowingTarget)" class="flex-1 py-2.5 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-bold">再試一次</button>
+                    <button @click="shadowingState = 'idle'" class="flex-1 py-2.5 bg-[#a67c52] text-white rounded-xl text-xs font-bold">完成</button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-[#e4d9c7] py-2 px-6 flex justify-around shadow-lg z-50 rounded-t-2xl">
+            <button @click="currentTab = 'templates'" :class="['flex flex-col items-center gap-1 px-3 py-1', currentTab === 'templates' ? 'text-[#a67c52]' : 'text-gray-400']">
+                <img :src="currentTab === 'templates' ? 'assets/nav-book-active.png' : 'assets/nav-book.png'" alt="句型" class="w-5 h-5" onerror="this.src='https://placehold.co/20?text=📖'">
+                <span class="text-[10px] font-black">萬用句型</span>
+            </button>
+            <button @click="currentTab = 'dialogue'" :class="['flex flex-col items-center gap-1 px-3 py-1', currentTab === 'dialogue' ? 'text-[#a67c52]' : 'text-gray-400']">
+                <img :src="currentTab === 'dialogue' ? 'assets/nav-sword-active.png' : 'assets/nav-sword.png'" alt="故事" class="w-5 h-5" onerror="this.src='https://placehold.co/20?text=⚔️'">
+                <span class="text-[10px] font-black">故事盲聽</span>
+            </button>
+            <button @click="currentTab = 'vocab'" :class="['flex flex-col items-center gap-1 px-3 py-1', currentTab === 'vocab' ? 'text-[#a67c52]' : 'text-gray-400']">
+                <img :src="currentTab === 'vocab' ? 'assets/nav-badge-active.png' : 'assets/nav-badge.png'" alt="成就" class="w-5 h-5" onerror="this.src='https://placehold.co/20?text=🎖️'">
+                <span class="text-[10px] font-black">部門修煉</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentTab = ref('templates');
+                const streakDays = ref(7);
+                const totalExp = ref(420);
+                const score = ref(100);
+                const earnedStars = ref(0);
+
+                const activeDept = ref(null);
+                const currentLevelTab = ref('初心者');
+                const revealText = ref(false); 
+                const speechRate = ref(1.0);  
+
+                const inDialogueSession = ref(false);
+                const currentModeTitle = ref('');
+                const currentScenario = ref(null);
+                const dialogueHistory = ref([]);
+                const dialogueFinished = ref(false);
+
+                // ======= 🔗 Google Sheets API 設定 =======
+                // 將 Apps Script 部署後的 Web App URL 貼在這裡
+                // 留空字串時自動使用下方寫死的 fallback 資料
+                const SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbwfz0yV5EImrChZ5mERx3VxrFZgMce2MAduBspQpnkLE9ggZEC40JCbS1ajcw6prm_h6w/exec';
+
+                const isLoading = ref(false);
+                const loadError = ref('');
+
+                // ======= 🎤 跟讀評分狀態 =======
+                const shadowingState = ref('idle'); // idle | listening | result
+                const shadowingTarget = ref('');
+                const shadowingResult = ref('');
+                const shadowingScore = ref(0);
+                const shadowingSupported = ref('speechRecognition' in window || 'webkitSpeechRecognition' in window);
+
+                // 文法字典與彈窗狀態定義
+                const showGrammar = ref(null);
+                const grammarDatabase = ref({
+                    "いたします": {
+                        title: "いたします (Kenjougo)",
+                        usage: "謙讓語「します」的正式用法。",
+                        explanation: "用於表達自己的動作，向對方表示尊敬。常用於提供服務或承諾行動。",
+                        example: "すぐお持ちいたします。(馬上為您送過去。)"
+                    },
+                    "ございません": {
+                        title: "ございません (Teineigo)",
+                        usage: "「ありません」的極度敬語形式。",
+                        explanation: "用於道歉或客觀陳述否定事實，讓語氣顯得更加莊重與誠懇。",
+                        example: "大変申し訳ございません。(萬分抱歉。)"
+                    }
+                });
+
+                const dialogueCategories = ref([
+                    { id: 'front', name: '前台接待', icon: '🛎️' },
+                    { id: 'phone', name: '電話應對', icon: '📞' },
+                    { id: 'restaurant', name: '餐飲內場', icon: '🥢' }
+                ]);
+
+                const departmentBadges = ref([
+                    { id: 'front', name: "櫃檯接待部" },
+                    { id: 'room', name: "客房服務部" }
+                ]);
+
+                const templates = ref([
+                    { id: 1, category: "物品故障狀況", fixedSentence: "[WORD]が壊[こわ]れてしまいました。", chineseMeaning: "[WORD]發生損壞故障了。", wordGroup: "設備", stars: 3 },
+                    { id: 2, category: "客房備品傳遞", fixedSentence: "ただいま[WORD]をお持[も]ちいたします。", chineseMeaning: "立刻為您將[WORD]送過去。", wordGroup: "備品", stars: 2 }
+                ]);
+
+                const vocabulary = ref([
+                    { id: 1, department: "front", level: "初心者", kanji: "掃|除|機", kana: "そう|じ|き", chinese: "吸塵器", wordGroup: "設備", studyCount: 15, mastery: "熟練", flipped: false },
+                    { id: 2, department: "front", level: "初心者", kanji: "毛|布", kana: "もう|ふ", chinese: "毛毯", wordGroup: "備品", studyCount: 12, mastery: "不熟", flipped: false },   
+                    { id: 3, department: "front", level: "進階", kanji: "御|精|算", kana: "ご|せい|さん", chinese: "結帳退房", wordGroup: "一般", studyCount: 0, mastery: "未接觸", flipped: false },
+                    { id: 4, department: "room", level: "初心者", kanji: "毛|布", kana: "もう|ふ", chinese: "毛毯", wordGroup: "備品", studyCount: 25, mastery: "大師", flipped: false }
+                ]);
+
+                const dialoguesDatabase = ref([
+                    { 
+                        id: 1, type: "front", category: "應對熟客", speaker: "客房常客（田中太太）",
+                        prompt: "部|屋[へ|や]のエアコンが動[うご]かないんだけど…", promptZh: "房間裡的空調好像轉不動呢……",
+                        options: [
+                            { text: "大|変[たい|へん]申[もう]し訳[わけ]ございません。ただいま確|認[かく|にん]の者[もの]を向[む]かわせます。", isCorrect: true, score: 3, feedback: "完美敬語！田中太太感到十分安心。" },
+                            { text: "エアコンが壊[こわ]れたんですね？すぐ直[なお]します。", isCorrect: false, score: 1, feedback: "太口語了，面對老顧客有失禮儀。" }
+                        ]
+                    },
+                    {
+                        id: 2, type: "phone", category: "預約詢問", speaker: "來電預約客",
+                        prompt: "三|人[さん|にん]で二|泊[に|はく]予|約[よ|やく]したいんですが、空[あ]いてますか？", promptZh: "我想預約三個人住兩晚，還有空房嗎？",
+                        options: [
+                            { text: "お調[しら]べいたしますので、少|々[しょう|しょう]お待[ま]ちいただけますでしょうか。", isCorrect: true, score: 3, feedback: "標準的轉接與查詢緩衝敬語！" },
+                            { text: "ちょっと待[ま]ってください、今[いま]見[み]ます。", isCorrect: false, score: 1, feedback: "「ちょっと待ってください」在職場上非常失禮。" }
+                        ]
+                    }
+                ]);
+
+                const selectedWords = ref({
+                    "設備": { kanji: "掃|除|機", kana: "そう|じ|き", chinese: "吸塵器" },
+                    "備品": { kanji: "毛|布", kana: "もう|ふ", chinese: "毛毯" },
+                });
+
+                // ======= 🎨 核心標註轉換引擎 + 文法點擊自動注入偵測 =======
+                const parseRuby = (text) => {
+                    if (!text) return '';
+                    
+                    // 1. 處理注音振假名
+                    let htmlResult = text.replace(/([\p{Unified_Ideograph}々〻ヽヾゝゞa-zA-Z0-9\|]+)\[([^\]]+)\]/gu, (match, kanjiPart, kanaPart) => {
+                        if (kanjiPart.includes('|') || kanaPart.includes('|')) {
+                            const kArr = kanjiPart.split('|');
+                            const nArr = kanaPart.split('|'); 
+                            let res = '';
+                            for (let i = 0; i < kArr.length; i++) {
+                                res += `<ruby style="display: inline-ruby !important; text-align: center !important; padding: 0 2px !important;">${kArr[i]}<rt style="display: ruby-text !important; text-align: center !important; font-size: 0.55em !important;">${nArr[i] || ''}</rt></ruby>`;
+                            }
+                            return res;
+                        }
+                        return `<ruby style="display: inline-ruby !important; text-align: center !important; padding: 0 2px !important;">${kanjiPart}<rt style="display: ruby-text !important; text-align: center !important; font-size: 0.55em !important;">${kanaPart}</rt></ruby>`;
+                    });
+
+                    // 2. 自動比對文法資料庫，注入帶有事件派發的樣式標籤
+                    Object.keys(grammarDatabase.value).forEach(key => {
+                        if (htmlResult.includes(key)) {
+                            const linkHtml = `<span onclick="window.dispatchEvent(new CustomEvent('show-grammar', {detail: '${key}'}))" class="cursor-pointer border-b border-dashed border-[#a67c52] text-[#a67c52] font-bold mx-0.5">${key}</span>`;
+                            const regex = new RegExp(key, 'g');
+                            htmlResult = htmlResult.replace(regex, linkHtml);
+                        }
+                    });
+
+                    return htmlResult;
+                };
+
+                // ======= 🔊 語音大掃除引擎 (開口前擦掉所有中括號和豎線) =======
+                const cleanTextForAudio = (text) => {
+                    if (!text) return '';
+                    return text.replace(/\|/g, '').replace(/\[[^\]]+\]/g, '');
+                };
+
+                // ======= 🔊 語音引擎：等待 voiceschanged 確保清單已載入 =======
+                let cachedVoices = [];
+                const loadVoices = () => {
+                    cachedVoices = window.speechSynthesis.getVoices();
+                };
+                if ('speechSynthesis' in window) {
+                    loadVoices();
+                    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+                }
+
+                const speak = (text) => {
+                    if (!('speechSynthesis' in window)) return;
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'ja-JP';
+                    utterance.rate = speechRate.value;
+
+                    const voices = cachedVoices.length ? cachedVoices : window.speechSynthesis.getVoices();
+                    const femaleVoice = voices.find(v =>
+                        v.lang === 'ja-JP' && /female|kyoko|haruka/i.test(v.name)
+                    ) || voices.find(v => v.lang === 'ja-JP');
+
+                    if (femaleVoice) utterance.voice = femaleVoice;
+                    window.speechSynthesis.speak(utterance);
+                };
+
+                // 萬用句型完美阻斷渲染函數
+                const renderSentence = (tpl) => {
+                    const chosen = selectedWords.value[tpl.wordGroup];
+                    let rawText = tpl.fixedSentence;
+
+                    if (chosen) {
+                        let styledWordHtml = '';
+                        if (chosen.kanji.includes('|') && chosen.kana.includes('|')) {
+                            const kanjis = chosen.kanji.split('|');
+                            const kanas = chosen.kana.split('|');
+                            
+                            styledWordHtml = '<span class="text-[#a67c52] font-black border-b-2 border-[#a67c52]/40 inline-block align-bottom mx-1">';
+                            for (let i = 0; i < kanjis.length; i++) {
+                                styledWordHtml += `<ruby style="display: inline-ruby !important; text-align: center !important; padding: 0 2px !important;">${kanjis[i]}<rt style="display: ruby-text !important; text-align: center !important; font-size: 0.55em !important; line-height: 1.1 !important;">${kanas[i] || ''}</rt></ruby>`;
+                            }
+                            styledWordHtml += '</span>';
+                        } else {
+                            styledWordHtml = `<span class="text-[#a67c52] font-black border-b-2 border-[#a67c52]/40 inline-block align-bottom"><ruby style="display: inline-ruby !important;">${chosen.kanji}<rt style="display: ruby-text !important;">${chosen.kana}</rt></ruby></span>`;
+                        }
+                        rawText = rawText.replace('[WORD]', styledWordHtml);
+                    }
+
+                    return parseRuby(rawText);
+                };
+
+                const pureSentenceText = (tpl) => {
+                    const chosen = selectedWords.value[tpl.wordGroup];
+                    const raw = tpl.fixedSentence.replace('[WORD]', chosen ? chosen.kanji : '');
+                    return cleanTextForAudio(raw);
+                };
+
+                const renderTranslation = (tpl) => {
+                    const chosen = selectedWords.value[tpl.wordGroup];
+                    return tpl.chineseMeaning.replace('[WORD]', chosen ? chosen.chinese : '');
+                };
+
+                // ======= 故事盲聽關卡邏輯 =======
+                const startRandomDialogue = () => {
+                    if (dialoguesDatabase.value.length === 0) return;
+                    const randIdx = Math.floor(Math.random() * dialoguesDatabase.value.length);
+                    setupDialogueSession(dialoguesDatabase.value[randIdx], "🎲 隨機綜合考驗");
+                };
+
+                const startTargetedDialogue = (typeId, typeName) => {
+                    const pool = dialoguesDatabase.value.filter(d => d.type === typeId);
+                    if (pool.length === 0) {
+                        alert(`目前【${typeName}】尚未登錄聽力題目！`);
+                        return;
+                    }
+                    const randIdx = Math.floor(Math.random() * pool.length);
+                    setupDialogueSession(pool[randIdx], `🎯 ${typeName}特訓`);
+                };
+
+                const setupDialogueSession = (scenario, modeTitle) => {
+                    currentScenario.value = scenario;
+                    currentModeTitle.value = modeTitle;
+                    revealText.value = false;
+                    dialogueFinished.value = false;
+                    score.value = 100;
+                    
+                    dialogueHistory.value = [{ speaker: scenario.speaker, text: scenario.prompt, translation: scenario.promptZh, isPlayer: false }];
+                    inDialogueSession.value = true;
+                    setTimeout(() => speak(cleanTextForAudio(scenario.prompt)), 300);
+                };
+
+                const exitDialogueSession = () => { inDialogueSession.value = false; currentScenario.value = null; };
+
+                // 🌟 新增：選擇回答選項後，發動自選語音朗讀與記錄
+                const submitAnswer = (optIdx) => {
+                    const option = currentScenario.value.options[optIdx];
+                    
+                    // 1. 播放你選擇的句子語音
+                    speak(cleanTextForAudio(option.text));
+
+                    // 2. 加入歷史記錄
+                    dialogueHistory.value.push({ speaker: "你", text: option.text, translation: "", isPlayer: true });
+                    revealText.value = true;
+
+                    // 3. 判斷與反饋（保持原有的延遲機制）
+                    setTimeout(() => {
+                        earnedStars.value = option.score;
+                        if (option.isCorrect) {
+                            totalExp.value += 40;
+                            dialogueHistory.value.push({ speaker: "系統提示", text: `⭕ ${option.feedback}`, translation: "", isPlayer: false });
+                        } else {
+                            score.value -= 30;
+                            dialogueHistory.value.push({ speaker: "系統提示", text: `❌ ${option.feedback}`, translation: "", isPlayer: false });
+                        }
+                        dialogueFinished.value = true;
+                    }, 400);
+                };
+
+                // ======= 🎤 跟讀評分引擎 =======
+                const startShadowing = (targetText) => {
+                    if (!shadowingSupported.value) {
+                        alert('您的瀏覽器不支援語音辨識，建議使用 Chrome。');
+                        return;
+                    }
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    const rec = new SpeechRecognition();
+                    rec.lang = 'ja-JP';
+                    rec.interimResults = false;
+                    rec.maxAlternatives = 1;
+
+                    shadowingTarget.value = targetText;
+                    shadowingState.value = 'listening';
+                    shadowingResult.value = '';
+                    shadowingScore.value = 0;
+
+                    rec.onresult = (e) => {
+                        const heard = e.results[0][0].transcript.trim();
+                        shadowingResult.value = heard;
+                        shadowingScore.value = calcShadowScore(targetText, heard);
+                        shadowingState.value = 'result';
+                    };
+                    rec.onerror = () => { shadowingState.value = 'idle'; };
+                    rec.onend = () => {
+                        if (shadowingState.value === 'listening') shadowingState.value = 'idle';
+                    };
+                    rec.start();
+                };
+
+                // 計算相似度（字元重疊比例）
+                const calcShadowScore = (target, heard) => {
+                    if (!heard) return 0;
+                    const t = target.replace(/\s/g, '');
+                    const h = heard.replace(/\s/g, '');
+                    let matches = 0;
+                    const used = new Array(h.length).fill(false);
+                    for (const ch of t) {
+                        const idx = h.split('').findIndex((c, i) => c === ch && !used[i]);
+                        if (idx !== -1) { matches++; used[idx] = true; }
+                    }
+                    return Math.round((matches / Math.max(t.length, h.length)) * 100);
+                };
+
+                // ======= 部門修煉邏輯 =======
+                const playWordSound = (word) => {
+                    word.studyCount++;
+                    if (word.studyCount >= 15) word.mastery = '大師';
+                    else if (word.studyCount >= 10) word.mastery = '熟練';
+                    else if (word.studyCount >= 1) word.mastery = '不熟';
+                    speak(word.kanji.replace(/\|/g, ''));
+                };
+
+                const startAudioQuiz = () => {
+                    if (filteredVocabByLevel.value.length === 0) return;
+                    const rand = filteredVocabByLevel.value[Math.floor(Math.random() * filteredVocabByLevel.value.length)];
+                    speak(rand.kanji.replace(/\|/g, ''));
+                    alert(`【聽力盲測爆破】\n請在名單中找出剛才聽到的單字：\n“ 意思是：${rand.chinese} ”`);
+                };
+
+                // ======= ⚡ 動態 v-html 跨組件事件監聽註冊 =======
+                const handleGrammarEvent = (e) => {
+                    if (grammarDatabase.value[e.detail]) {
+                        showGrammar.value = grammarDatabase.value[e.detail];
+                    }
+                };
+
+                // ======= 📡 Google Sheets 資料載入 =======
+                const loadFromSheets = async () => {
+                    if (!SHEETS_API_URL) return; // 沒填 URL 就用寫死資料
+
+                    isLoading.value = true;
+                    loadError.value = '';
+                    try {
+                        const res = await fetch(SHEETS_API_URL);
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const data = await res.json();
+
+                        // ── departments ──
+                        if (data.departments?.length) {
+                            departmentBadges.value = data.departments.map(r => ({
+                                id: String(r.id),
+                                name: String(r.name)
+                            }));
+                        }
+
+                        // ── vocabulary ──
+                        if (data.vocabulary?.length) {
+                            vocabulary.value = data.vocabulary.map(r => ({
+                                id: Number(r.id),
+                                department: String(r.department),
+                                level: String(r.level),
+                                kanji: String(r.kanji),
+                                kana: String(r.kana),
+                                chinese: String(r.chinese),
+                                wordGroup: String(r.wordGroup),
+                                studyCount: Number(r.studyCount) || 0,
+                                mastery: String(r.mastery) || '未接觸',
+                                flipped: false
+                            }));
+                        }
+
+                        // ── templates ──
+                        if (data.templates?.length) {
+                            templates.value = data.templates.map(r => ({
+                                id: Number(r.id),
+                                category: String(r.category),
+                                fixedSentence: String(r.fixedSentence),
+                                chineseMeaning: String(r.chineseMeaning),
+                                wordGroup: String(r.wordGroup),
+                                stars: Number(r.stars) || 1
+                            }));
+                        }
+
+                        // ── dialogues（多欄 option 組裝成 options[]）──
+                        if (data.dialogues?.length) {
+                            dialoguesDatabase.value = data.dialogues.map(r => {
+                                const options = [];
+                                // 支援最多 4 個選項欄位
+                                for (let i = 1; i <= 4; i++) {
+                                    if (r[`option${i}_text`]) {
+                                        options.push({
+                                            text: String(r[`option${i}_text`]),
+                                            isCorrect: String(r[`option${i}_isCorrect`]).toUpperCase() === 'TRUE',
+                                            score: Number(r[`option${i}_score`]) || 1,
+                                            feedback: String(r[`option${i}_feedback`] || '')
+                                        });
+                                    }
+                                }
+                                return {
+                                    id: Number(r.id),
+                                    type: String(r.type),
+                                    category: String(r.category),
+                                    speaker: String(r.speaker),
+                                    prompt: String(r.prompt),
+                                    promptZh: String(r.promptZh),
+                                    options
+                                };
+                            });
+                        }
+
+                        // ── grammarNotes（陣列轉成 key-value 物件）──
+                        if (data.grammarNotes?.length) {
+                            const obj = {};
+                            data.grammarNotes.forEach(r => {
+                                if (r.key) obj[String(r.key)] = {
+                                    title: String(r.title),
+                                    usage: String(r.usage),
+                                    explanation: String(r.explanation),
+                                    example: String(r.example)
+                                };
+                            });
+                            grammarDatabase.value = obj;
+                        }
+
+                        // ── selectedWords 重設為第一個可用單字 ──
+                        const newSelected = {};
+                        templates.value.forEach(tpl => {
+                            if (!newSelected[tpl.wordGroup]) {
+                                const first = vocabulary.value.find(v => v.wordGroup === tpl.wordGroup);
+                                if (first) newSelected[tpl.wordGroup] = first;
+                            }
+                        });
+                        if (Object.keys(newSelected).length) {
+                            selectedWords.value = newSelected;
+                        }
+
+                    } catch (e) {
+                        loadError.value = `資料載入失敗：${e.message}，目前使用示範資料。`;
+                        console.error('Sheets fetch error:', e);
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                onMounted(() => {
+                    window.addEventListener('show-grammar', handleGrammarEvent);
+                    loadFromSheets();
+                });
+
+                onUnmounted(() => {
+                    window.removeEventListener('show-grammar', handleGrammarEvent);
+                    if ('speechSynthesis' in window) {
+                        window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+                    }
+                });
+
+                return {
+                    currentTab, streakDays, totalExp, score, earnedStars, 
+                    overallProgress: computed(() => {
+                        const total = departmentBadges.value.length;
+                        if (!total) return 0;
+                        const done = departmentBadges.value.filter(d => vocabulary.value.filter(v => v.department === d.id && v.studyCount > 0).length >= 1).length;
+                        return Math.round((done / total) * 100);
+                    }),
+                    activeDept, currentLevelTab, revealText, speechRate, departmentBadges, 
+                    filteredVocabByLevel: computed(() => {
+                        if (!activeDept.value) return [];
+                        return vocabulary.value.filter(v => v.department === activeDept.value.id && v.level === currentLevelTab.value);
+                    }), 
+                    templates, selectedWords, dialogueHistory, showGrammar, grammarDatabase,
+                    inDialogueSession, currentModeTitle, currentScenario, dialogueCategories, dialogueFinished,
+                    parseRuby, cleanTextForAudio, speak, playWordSound, startAudioQuiz, pureSentenceText, renderSentence, 
+                    renderTranslation, getWordsByGroup: (g) => vocabulary.value.filter(v => v.wordGroup === g), 
+                    enterDepartment: (d) => { activeDept.value = d; currentLevelTab.value = '初心者'; }, 
+                    getDeptProgress: (id) => {
+                        const ws = vocabulary.value.filter(v => v.department === id);
+                        return ws.length ? Math.round((ws.filter(v => v.studyCount > 0).length / ws.length) * 100) : 0;
+                    }, 
+                    getDeptRankName: (id) => {
+                        const p = vocabulary.value.filter(v => v.department === id).filter(v => v.studyCount > 0).length;
+                        return p >= 3 ? "👑 傳奇大師" : p >= 1 ? "⚔️ 高級內行" : "🔰 新秀見習";
+                    }, 
+                    getMasteryStyle: (m) => m === '大師' ? 'bg-purple-100 text-purple-700' : m === '熟練' ? 'bg-green-100 text-green-700' : m === '不熟' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-400', 
+                    submitAnswer, startRandomDialogue, startTargetedDialogue, exitDialogueSession,
+                    shadowingState, shadowingTarget, shadowingResult, shadowingScore, shadowingSupported, startShadowing,
+                    isLoading, loadError
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
