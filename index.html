@@ -372,20 +372,47 @@
     </div>
 
     <script>
-        const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+        const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 
         createApp({
             setup() {
+                // ======= 💾 localStorage 持久化工具 =======
+                const LS_KEY = 'jpRpgSave_v1';
+
+                const loadSave = () => {
+                    try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } 
+                    catch { return {}; }
+                };
+
+                const writeSave = (patch) => {
+                    try {
+                        const current = loadSave();
+                        localStorage.setItem(LS_KEY, JSON.stringify({ ...current, ...patch }));
+                    } catch {}
+                };
+
+                // ── 計算連擊天數 ──
+                const calcStreak = (save) => {
+                    const today = new Date().toDateString();
+                    if (save.lastVisit === today) return save.streakDays || 0;
+                    const yesterday = new Date(Date.now() - 86400000).toDateString();
+                    const newStreak = save.lastVisit === yesterday ? (save.streakDays || 0) + 1 : 1;
+                    writeSave({ lastVisit: today, streakDays: newStreak });
+                    return newStreak;
+                };
+
+                // ── 初始化讀取存檔 ──
+                const save = loadSave();
                 const currentTab = ref('templates');
-                const streakDays = ref(7);
-                const totalExp = ref(420);
+                const streakDays = ref(calcStreak(save));
+                const totalExp = ref(save.totalExp || 0);
                 const score = ref(100);
                 const earnedStars = ref(0);
 
                 const activeDept = ref(null);
                 const currentLevelTab = ref('初心者');
-                const revealText = ref(false); 
-                const speechRate = ref(1.0);  
+                const revealText = ref(false);
+                const speechRate = ref(save.speechRate || 1.0);
 
                 const inDialogueSession = ref(false);
                 const currentModeTitle = ref('');
@@ -617,6 +644,7 @@
                         earnedStars.value = option.score;
                         if (option.isCorrect) {
                             totalExp.value += 40;
+                            writeSave({ totalExp: totalExp.value });
                             dialogueHistory.value.push({ speaker: "系統提示", text: `⭕ ${option.feedback}`, translation: "", isPlayer: false });
                         } else {
                             score.value -= 30;
@@ -676,6 +704,10 @@
                     if (word.studyCount >= 15) word.mastery = '大師';
                     else if (word.studyCount >= 10) word.mastery = '熟練';
                     else if (word.studyCount >= 1) word.mastery = '不熟';
+                    // 把所有單字的熟練度存進 localStorage
+                    const vocabProgress = {};
+                    vocabulary.value.forEach(v => { vocabProgress[v.id] = { studyCount: v.studyCount, mastery: v.mastery }; });
+                    writeSave({ vocabProgress });
                     speak(word.kanji.replace(/\|/g, ''));
                 };
 
@@ -729,20 +761,24 @@
                             }));
                         }
 
-                        // ── vocabulary ──
+                        // ── vocabulary（載入後合併本地熟練度）──
                         if (data.vocabulary?.length) {
-                            vocabulary.value = data.vocabulary.map(r => ({
-                                id: Number(r.id),
-                                department: String(r.department),
-                                level: String(r.level),
-                                kanji: String(r.kanji),
-                                kana: String(r.kana),
-                                chinese: String(r.chinese),
-                                wordGroup: String(r.wordGroup),
-                                studyCount: Number(r.studyCount) || 0,
-                                mastery: String(r.mastery) || '未接觸',
-                                flipped: false
-                            }));
+                            const vocabProgress = loadSave().vocabProgress || {};
+                            vocabulary.value = data.vocabulary.map(r => {
+                                const local = vocabProgress[r.id];
+                                return {
+                                    id: Number(r.id),
+                                    department: String(r.department),
+                                    level: String(r.level),
+                                    kanji: String(r.kanji),
+                                    kana: String(r.kana),
+                                    chinese: String(r.chinese),
+                                    wordGroup: String(r.wordGroup),
+                                    studyCount: local ? local.studyCount : (Number(r.studyCount) || 0),
+                                    mastery: local ? local.mastery : (String(r.mastery) || '未接觸'),
+                                    flipped: false
+                                };
+                            });
                         }
 
                         // ── templates ──
@@ -821,6 +857,8 @@
                 onMounted(() => {
                     window.addEventListener('show-grammar', handleGrammarEvent);
                     loadFromSheets();
+                    // 語速偏好變更時自動存檔
+                    watch(speechRate, (val) => writeSave({ speechRate: val }));
                 });
 
                 onUnmounted(() => {
