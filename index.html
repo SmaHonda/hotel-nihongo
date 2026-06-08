@@ -554,20 +554,32 @@
                 });
 
                 // ======= 🎨 核心標註轉換引擎 + 文法點擊自動注入偵測 =======
+                const isKanjiChar = (ch) => /\p{Unified_Ideograph}/u.test(ch) || /[々〻ヽヾゝゞ]/.test(ch);
+
                 const parseRuby = (text) => {
                     if (!text) return '';
                     
                     // 1. 處理注音振假名
-                    let htmlResult = text.replace(/([\p{Unified_Ideograph}々〻ヽヾゝゞa-zA-Z0-9\|]+)\[([^\]]+)\]/gu, (match, kanjiPart, kanaPart) => {
+                    // 字元集擴充：加入平假名、片假名，讓「承|り」「お手|数」等混假名單字也能被 match
+                    let htmlResult = text.replace(/([\p{Unified_Ideograph}々〻ヽヾゝゞ\p{Script=Hiragana}\p{Script=Katakana}a-zA-Z0-9\|]+)\[([^\]]+)\]/gu, (match, kanjiPart, kanaPart) => {
                         if (kanjiPart.includes('|') || kanaPart.includes('|')) {
                             const kArr = kanjiPart.split('|');
-                            const nArr = kanaPart.split('|'); 
+                            const nArr = kanaPart.split('|');
                             let res = '';
                             for (let i = 0; i < kArr.length; i++) {
-                                res += `<ruby style="display: inline-ruby !important; text-align: center !important; padding: 0 2px !important;">${kArr[i]}<rt style="display: ruby-text !important; text-align: center !important; font-size: 0.55em !important;">${nArr[i] || ''}</rt></ruby>`;
+                                const seg = kArr[i];
+                                const reading = nArr[i] || '';
+                                // 如果這段本身全是假名（平/片），直接輸出不包 ruby
+                                if (!isKanjiChar(seg[0])) {
+                                    res += seg;
+                                } else {
+                                    res += `<ruby style="display: inline-ruby !important; text-align: center !important; padding: 0 2px !important;">${seg}<rt style="display: ruby-text !important; text-align: center !important; font-size: 0.55em !important;">${reading}</rt></ruby>`;
+                                }
                             }
                             return res;
                         }
+                        // 單段：若本身是假名就直接輸出
+                        if (!isKanjiChar(kanjiPart[0])) return kanjiPart;
                         return `<ruby style="display: inline-ruby !important; text-align: center !important; padding: 0 2px !important;">${kanjiPart}<rt style="display: ruby-text !important; text-align: center !important; font-size: 0.55em !important;">${kanaPart}</rt></ruby>`;
                     });
 
