@@ -214,10 +214,20 @@
                     <div class="flex justify-center gap-1">
                         <img v-for="n in 3" :key="n" :src="n <= earnedStars ? 'assets/star-filled.png' : 'assets/star-empty.png'" alt="星" class="w-7 h-7" onerror="this.src='https://placehold.co/25?text=★'">
                     </div>
-                    <button v-if="currentScenario" @click="speak(cleanTextForAudio(currentScenario.options.find(o=>o.isCorrect).text)); setTimeout(() => startShadowing(cleanTextForAudio(currentScenario.options.find(o=>o.isCorrect).text)), 3500)"
+
+                    <!-- 跟讀正確答案 -->
+                    <button v-if="currentScenario" 
+                            @click="speak(cleanTextForAudio(currentScenario.options.find(o=>o.isCorrect).text)); setTimeout(() => startShadowing(cleanTextForAudio(currentScenario.options.find(o=>o.isCorrect).text)), 2500)"
                             class="w-full py-2.5 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
-                        🎤 跟讀正確答案練習
+                        🎤 先聽一遍，再跟讀練習
                     </button>
+
+                    <!-- 繼續下一題 -->
+                    <button @click="nextDialogue" 
+                            class="w-full py-2.5 bg-[#f3ece0] border border-[#e4d9c7] text-[#a67c52] rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
+                        ⚡ 繼續下一題
+                    </button>
+
                     <button @click="exitDialogueSession" class="w-full py-2.5 bg-[#a67c52] text-white rounded-xl text-xs font-bold transition">返回冒險大廳</button>
                 </div>
             </div>
@@ -423,7 +433,7 @@
                 // ======= 🔗 Google Sheets API 設定 =======
                 // 將 Apps Script 部署後的 Web App URL 貼在這裡
                 // 留空字串時自動使用下方寫死的 fallback 資料
-                const SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbx83FtDKM3Ik8BMHw0qyGb9Y1M1BzMA58PWrUlxdlaI2_MFliWfdH-xcD1LvHEodXT4ww/exec';
+                const SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxzRgLbhlWt85II-0iGX5uKsssIppjRBqu1jaFLVPd_AzRctfOB3ZFDFpYocWk7NbO0/exec';
 
                 const isLoading = ref(false);
                 const loadError = ref('');
@@ -627,6 +637,28 @@
                 };
 
                 const exitDialogueSession = () => { inDialogueSession.value = false; currentScenario.value = null; };
+
+                const nextDialogue = () => {
+                    const modeType = currentModeTitle.value.startsWith('🎲') ? 'random' : 'targeted';
+                    if (modeType === 'random') {
+                        if (dialoguesDatabase.value.length === 0) return;
+                        const pool = dialoguesDatabase.value.filter(d => d.id !== currentScenario.value?.id);
+                        const rand = pool.length ? pool[Math.floor(Math.random() * pool.length)] : dialoguesDatabase.value[0];
+                        setupDialogueSession(rand, currentModeTitle.value);
+                    } else {
+                        // 從 modeTitle 推回 typeId（格式為「🎯 XXX特訓」）
+                        const typeName = currentModeTitle.value.replace('🎯 ', '').replace('特訓', '');
+                        const matched = dialogueCategories.value.find(c => c.name === typeName);
+                        if (!matched) return;
+                        const pool = dialoguesDatabase.value.filter(d => d.type === matched.id && d.id !== currentScenario.value?.id);
+                        if (pool.length === 0) {
+                            alert('該部門目前只有一道題目，請繼續加入更多！');
+                            return;
+                        }
+                        const rand = pool[Math.floor(Math.random() * pool.length)];
+                        setupDialogueSession(rand, currentModeTitle.value);
+                    }
+                };
 
                 // 🌟 新增：選擇回答選項後，發動自選語音朗讀與記錄
                 const submitAnswer = (optIdx) => {
@@ -881,7 +913,7 @@
                         return p >= 3 ? "👑 傳奇大師" : p >= 1 ? "⚔️ 高級內行" : "🔰 新秀見習";
                     }, 
                     getMasteryStyle: (m) => m === '大師' ? 'bg-purple-100 text-purple-700' : m === '熟練' ? 'bg-green-100 text-green-700' : m === '不熟' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-400', 
-                    submitAnswer, startRandomDialogue, startTargetedDialogue, exitDialogueSession,
+                    submitAnswer, startRandomDialogue, startTargetedDialogue, exitDialogueSession, nextDialogue,
                     shadowingState, shadowingTarget, shadowingResult, shadowingScore, shadowingSupported, startShadowing,
                     isLoading, loadError
                 };
