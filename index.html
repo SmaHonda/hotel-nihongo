@@ -91,44 +91,71 @@
         </header>
 
         <main v-if="currentTab === 'templates'" class="space-y-4">
-            <div class="flex justify-between items-center px-1">
-                <h2 class="text-sm font-bold text-gray-500 tracking-wider">萬用句型裝備</h2>
-                <span class="text-xs text-gray-400">連動更換裝備可發動發音</span>
-            </div>
-            
-            <div v-for="tpl in templates" :key="tpl.id" class="bg-white p-5 rounded-2xl shadow-sm border border-[#e4d9c7] space-y-4">
-                <div class="flex justify-between items-center">
-                    <span class="bg-[#ecd0b3] text-[#6d4c41] text-xs px-2.5 py-1 rounded-md font-bold">
-                        {{ tpl.category }}
-                    </span>
-                    <div class="flex items-center gap-3">
-                        <button @click="speak(pureSentenceText(tpl))" class="p-1.5 bg-[#fdfbf7] hover:bg-[#ebdcc5] border border-[#e4d9c7] rounded-lg transition active:scale-95">
-                            <img src="assets/icon-audio.png" alt="播放" class="w-4 h-4" onerror="this.src='https://placehold.co/15?text=🔊'">
-                        </button>
-                        <button @click="speak(pureSentenceText(tpl)); setTimeout(() => startShadowing(pureSentenceText(tpl)), 2200)" class="p-1.5 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition active:scale-95" title="跟讀評分">
-                            <span class="text-sm">🎤</span>
-                        </button>
-                        <div class="flex gap-0.5">
-                            <img v-for="n in 3" :key="n" :src="n <= tpl.stars ? 'assets/star-filled.png' : 'assets/star-empty.png'" alt="星" class="w-3.5 h-3.5" onerror="this.src='https://placehold.co/12?text=★'">
+
+            <!-- 分類選單 -->
+            <div v-if="!activeTemplateCategory">
+                <div class="flex justify-between items-center px-1 mb-3">
+                    <h2 class="text-sm font-bold text-gray-500 tracking-wider">選擇句型分類</h2>
+                </div>
+                <div class="grid grid-cols-1 gap-3">
+                    <div v-for="cat in templateCategories" :key="cat"
+                         @click="activeTemplateCategory = cat"
+                         class="bg-white p-4 rounded-2xl border border-[#e4d9c7] shadow-sm flex items-center justify-between cursor-pointer hover:bg-[#fffcf7] transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-[#f3ece0] rounded-xl flex items-center justify-center text-lg">📋</div>
+                            <div>
+                                <h3 class="font-black text-sm text-gray-800">{{ cat }}</h3>
+                                <p class="text-[11px] text-gray-400 mt-0.5">{{ templates.filter(t => t.category === cat).length }} 個句型</p>
+                            </div>
                         </div>
+                        <span class="text-xs font-bold text-[#a67c52]">練習 ➔</span>
                     </div>
                 </div>
-                
-                <div class="space-y-2 pt-1">
-                    <p class="text-xl font-medium tracking-wide text-gray-800 leading-relaxed" v-html="renderSentence(tpl)"></p>
-                    <p class="text-xs text-gray-400 font-medium tracking-wide">{{ renderTranslation(tpl) }}</p>
+            </div>
+
+            <!-- 該分類的句型列表 -->
+            <div v-else class="space-y-4">
+                <button @click="activeTemplateCategory = null" class="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-[#a67c52] px-1">
+                    <img src="assets/icon-back.png" class="w-3 h-3 opacity-60" onerror="this.src='https://placehold.co/10?text=←'"> 返回分類
+                </button>
+                <div class="flex justify-between items-center px-1">
+                    <h2 class="text-sm font-bold text-[#a67c52] tracking-wider">{{ activeTemplateCategory }}</h2>
+                    <span class="text-xs text-gray-400">點選單字可換字練習</span>
                 </div>
 
-                <div class="flex items-center gap-2 bg-[#fdfbf7] p-2.5 rounded-xl border border-dashed border-[#dcd1be]">
-                    <img src="assets/icon-switch.png" alt="切換" class="w-4 h-4" onerror="this.src='https://placehold.co/15?text=🔄'">
-                    <select v-model="selectedWords[tpl.wordGroup]" class="w-full bg-transparent font-bold focus:outline-none text-sm text-[#a67c52]">
-                        <option v-for="word in getWordsByGroup(tpl.wordGroup)" :key="word.id" :value="word">
-                            {{ word.kanji.replace(/\|/g, '') }} — {{ word.chinese }}
-                        </option>
-                    </select>
+                <div v-for="tpl in templates.filter(t => t.category === activeTemplateCategory)" :key="tpl.id" class="bg-white p-5 rounded-2xl shadow-sm border border-[#e4d9c7] space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="bg-[#ecd0b3] text-[#6d4c41] text-xs px-2.5 py-1 rounded-md font-bold">{{ tpl.category }}</span>
+                        <div class="flex items-center gap-3">
+                            <button @click="speak(pureSentenceText(tpl))" class="p-1.5 bg-[#fdfbf7] hover:bg-[#ebdcc5] border border-[#e4d9c7] rounded-lg transition active:scale-95">
+                                <img src="assets/icon-audio.png" alt="播放" class="w-4 h-4" onerror="this.src='https://placehold.co/15?text=🔊'">
+                            </button>
+                            <button @click="startShadowing(pureSentenceText(tpl))" class="p-1.5 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition active:scale-95" title="跟讀評分">
+                                <span class="text-sm">🎤</span>
+                            </button>
+                            <div class="flex gap-0.5">
+                                <img v-for="n in 3" :key="n" :src="n <= tpl.stars ? 'assets/star-filled.png' : 'assets/star-empty.png'" alt="星" class="w-3.5 h-3.5" onerror="this.src='https://placehold.co/12?text=★'">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 pt-1">
+                        <p class="text-xl font-medium tracking-wide text-gray-800 leading-relaxed" v-html="renderSentence(tpl)"></p>
+                        <p class="text-xs text-gray-400 font-medium tracking-wide">{{ renderTranslation(tpl) }}</p>
+                    </div>
+
+                    <div class="flex items-center gap-2 bg-[#fdfbf7] p-2.5 rounded-xl border border-dashed border-[#dcd1be]">
+                        <img src="assets/icon-switch.png" alt="切換" class="w-4 h-4" onerror="this.src='https://placehold.co/15?text=🔄'">
+                        <select v-model="selectedWords[tpl.id]" class="w-full bg-transparent font-bold focus:outline-none text-sm text-[#a67c52]">
+                            <option v-for="word in getWordsByGroup(tpl.wordGroup)" :key="word.id" :value="word">
+                                {{ word.kanji.replace(/\|/g, '') }} — {{ word.chinese }}
+                            </option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </main>
+
 
         <main v-if="currentTab === 'dialogue'" class="space-y-4">
             <div v-if="!inDialogueSession" class="space-y-4">
@@ -445,6 +472,7 @@
                 const currentScenario = ref(null);
                 const dialogueHistory = ref([]);
                 const dialogueFinished = ref(false);
+                const activeTemplateCategory = ref(null);
 
                 // ======= 🔗 Google Sheets API 設定 =======
                 // 將 Apps Script 部署後的 Web App URL 貼在這裡
@@ -521,8 +549,8 @@
                 ]);
 
                 const selectedWords = ref({
-                    "設備": { kanji: "掃|除|機", kana: "そう|じ|き", chinese: "吸塵器" },
-                    "備品": { kanji: "毛|布", kana: "もう|ふ", chinese: "毛毯" },
+                    1: vocabulary.value.find(v => v.wordGroup === "設備") || null,
+                    2: vocabulary.value.find(v => v.wordGroup === "備品") || null,
                 });
 
                 // ======= 🎨 核心標註轉換引擎 + 文法點擊自動注入偵測 =======
@@ -597,7 +625,7 @@
 
                 // 萬用句型完美阻斷渲染函數
                 const renderSentence = (tpl) => {
-                    const chosen = selectedWords.value[tpl.wordGroup];
+                    const chosen = selectedWords.value[tpl.id];
                     let rawText = tpl.fixedSentence;
 
                     if (chosen) {
@@ -621,13 +649,13 @@
                 };
 
                 const pureSentenceText = (tpl) => {
-                    const chosen = selectedWords.value[tpl.wordGroup];
+                    const chosen = selectedWords.value[tpl.id];
                     const raw = tpl.fixedSentence.replace('[WORD]', chosen ? chosen.kanji : '');
                     return cleanTextForAudio(raw);
                 };
 
                 const renderTranslation = (tpl) => {
-                    const chosen = selectedWords.value[tpl.wordGroup];
+                    const chosen = selectedWords.value[tpl.id];
                     return tpl.chineseMeaning.replace('[WORD]', chosen ? chosen.chinese : '');
                 };
 
@@ -660,9 +688,15 @@
                     speak(cleanTextForAudio(scenario.prompt));
                 };
 
-                const exitDialogueSession = () => { inDialogueSession.value = false; currentScenario.value = null; };
+                const exitDialogueSession = () => { 
+                    window.speechSynthesis?.cancel();
+                    inDialogueSession.value = false; 
+                    currentScenario.value = null;
+                    dialogueFinished.value = false;
+                };
 
                 const nextDialogue = () => {
+                    window.speechSynthesis?.cancel();
                     const modeType = currentModeTitle.value.startsWith('🎲') ? 'random' : 'targeted';
                     if (modeType === 'random') {
                         if (dialoguesDatabase.value.length === 0) return;
@@ -670,7 +704,6 @@
                         const rand = pool.length ? pool[Math.floor(Math.random() * pool.length)] : dialoguesDatabase.value[0];
                         setupDialogueSession(rand, currentModeTitle.value);
                     } else {
-                        // 從 modeTitle 推回 typeId（格式為「🎯 XXX特訓」）
                         const typeName = currentModeTitle.value.replace('🎯 ', '').replace('特訓', '');
                         const matched = dialogueCategories.value.find(c => c.name === typeName);
                         if (!matched) return;
@@ -899,17 +932,12 @@
                             grammarDatabase.value = obj;
                         }
 
-                        // ── selectedWords 重設為第一個可用單字 ──
                         const newSelected = {};
                         templates.value.forEach(tpl => {
-                            if (!newSelected[tpl.wordGroup]) {
-                                const first = vocabulary.value.find(v => v.wordGroup === tpl.wordGroup);
-                                if (first) newSelected[tpl.wordGroup] = first;
-                            }
+                            const first = vocabulary.value.find(v => v.wordGroup === tpl.wordGroup);
+                            if (first) newSelected[tpl.id] = first;
                         });
-                        if (Object.keys(newSelected).length) {
-                            selectedWords.value = newSelected;
-                        }
+                        if (Object.keys(newSelected).length) selectedWords.value = newSelected;
 
                     } catch (e) {
                         loadError.value = `資料載入失敗：${e.message}，目前使用示範資料。`;
@@ -934,7 +962,9 @@
                 });
 
                 return {
-                    currentTab, streakDays, totalExp, score, earnedStars, 
+                    currentTab, streakDays, totalExp, score, earnedStars,
+                    activeTemplateCategory,
+                    templateCategories: computed(() => [...new Set(templates.value.map(t => t.category))]),
                     overallProgress: computed(() => {
                         const total = departmentBadges.value.length;
                         if (!total) return 0;
