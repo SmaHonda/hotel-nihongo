@@ -189,7 +189,7 @@
                 <div v-if="currentScenario" class="bg-white p-4 rounded-2xl border border-[#e4d9c7] flex justify-between items-center shadow-sm">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 bg-[#f3ece0] rounded-xl overflow-hidden border border-[#dcd1be]">
-                            <img :src="'assets/npc-' + currentScenario.id + '.png'" alt="NPC" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/50?text=NPC'">
+                            <img :src="'assets/npc-' + currentScenario.speaker + '.png'" alt="NPC" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/50?text=NPC'">
                         </div>
                         <div>
                             <p class="font-bold text-sm">{{ currentScenario.speaker }}</p>
