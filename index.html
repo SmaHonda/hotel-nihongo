@@ -130,7 +130,7 @@
                             <button @click="speak(pureSentenceText(tpl))" class="p-1.5 bg-[#fdfbf7] hover:bg-[#ebdcc5] border border-[#e4d9c7] rounded-lg transition active:scale-95">
                                 <img src="assets/icon-audio.png" alt="播放" class="w-4 h-4" onerror="this.src='https://placehold.co/15?text=🔊'">
                             </button>
-                            <button @click="startShadowing(pureSentenceText(tpl))" class="p-1.5 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition active:scale-95" title="跟讀評分">
+                            <button @click="startShadowing(tpl.fixedSentence.replace('[WORD]', selectedWords[tpl.id] ? selectedWords[tpl.id].kanji + '[' + selectedWords[tpl.id].kana + ']' : ''))" class="p-1.5 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition active:scale-95" title="跟讀評分">
                                 <span class="text-sm">🎤</span>
                             </button>
                             <div class="flex gap-0.5">
@@ -249,9 +249,9 @@
                         🔊 聽正確答案
                     </button>
 
-                    <!-- 跟讀練習（獨立按鈕，直接在 click 裡啟動錄音）-->
+                    <!-- 跟讀練習：傳 raw 格式讓視窗顯示振假名 -->
                     <button v-if="currentScenario" 
-                            @click="startShadowing(cleanTextForAudio(currentScenario.options.find(o=>o.isCorrect).text))"
+                            @click="startShadowing(currentScenario.options.find(o=>o.isCorrect).text)"
                             class="w-full py-2.5 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
                         🎤 跟讀練習
                     </button>
@@ -367,7 +367,7 @@
                 </div>
                 <div class="bg-gray-50 rounded-xl p-3 text-left">
                     <p class="text-[9px] font-bold text-gray-400 mb-1">目標句子</p>
-                    <p class="text-xs text-gray-700 leading-relaxed">{{ shadowingTarget }}</p>
+                    <p class="text-sm text-gray-700 leading-loose" v-html="parseRuby(shadowingTargetRaw)"></p>
                 </div>
                 <p class="text-[10px] text-gray-400">說完後會自動停止錄音</p>
             </div>
@@ -388,7 +388,7 @@
                 <div class="space-y-2">
                     <div class="bg-gray-50 rounded-lg p-3">
                         <p class="text-[9px] font-bold text-gray-400 mb-1">目標句子</p>
-                        <p class="text-xs text-gray-700">{{ shadowingTarget }}</p>
+                        <p class="text-sm text-gray-700 leading-loose" v-html="parseRuby(shadowingTargetRaw)"></p>
                     </div>
                     <div class="bg-blue-50 rounded-lg p-3">
                         <p class="text-[9px] font-bold text-blue-400 mb-1">你說的</p>
@@ -401,7 +401,7 @@
                          :style="{ width: shadowingScore + '%' }"></div>
                 </div>
                 <div class="flex gap-2">
-                    <button @click="startShadowing(shadowingTarget)" class="flex-1 py-2.5 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-bold">再試一次</button>
+                    <button @click="startShadowing(shadowingTargetRaw)" class="flex-1 py-2.5 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-bold">再試一次</button>
                     <button @click="shadowingState = 'idle'" class="flex-1 py-2.5 bg-[#a67c52] text-white rounded-xl text-xs font-bold">完成</button>
                 </div>
             </div>
@@ -483,8 +483,9 @@
                 const loadError = ref('');
 
                 // ======= 🎤 跟讀評分狀態 =======
-                const shadowingState = ref('idle'); // idle | listening | result
-                const shadowingTarget = ref('');
+                const shadowingState = ref('idle');
+                const shadowingTarget = ref('');     // 純文字（給辨識比對用）
+                const shadowingTargetRaw = ref('');  // 原始標注格式（給 UI 顯示振假名用）
                 const shadowingResult = ref('');
                 const shadowingScore = ref(0);
                 const shadowingSupported = ref('speechRecognition' in window || 'webkitSpeechRecognition' in window);
@@ -601,38 +602,60 @@
                     return text.replace(/\|/g, '').replace(/\[[^\]]+\]/g, '');
                 };
 
-                // ======= 🔊 語音引擎：等待 voiceschanged 確保清單已載入 =======
+                // ======= 🔊 語音引擎 =======
                 let cachedVoices = [];
                 const loadVoices = () => {
-                    cachedVoices = window.speechSynthesis.getVoices();
+                    const v = window.speechSynthesis.getVoices();
+                    if (v.length) cachedVoices = v;
                 };
                 if ('speechSynthesis' in window) {
                     loadVoices();
                     window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
                 }
 
-                // 女聲優先順序：iOS Kyoko → Windows Haruka → 名字含 female → 任意 ja-JP
                 const FEMALE_VOICE_PRIORITY = ['kyoko', 'haruka', 'female', 'woman'];
+
+                const getJaVoice = () => {
+                    const voices = cachedVoices.length ? cachedVoices : window.speechSynthesis.getVoices();
+                    // iOS 有時回傳 ja_JP（底線），一起納入
+                    const jaVoices = voices.filter(v => /^ja[-_]/i.test(v.lang) || v.lang === 'ja');
+                    let femaleVoice = null;
+                    for (const kw of FEMALE_VOICE_PRIORITY) {
+                        femaleVoice = jaVoices.find(v => v.name.toLowerCase().includes(kw));
+                        if (femaleVoice) break;
+                    }
+                    return femaleVoice || jaVoices[0] || null;
+                };
 
                 const speak = (text) => {
                     if (!('speechSynthesis' in window)) return;
                     window.speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.lang = 'ja-JP';
-                    utterance.rate = speechRate.value;
 
-                    const voices = cachedVoices.length ? cachedVoices : window.speechSynthesis.getVoices();
-                    const jaVoices = voices.filter(v => v.lang === 'ja-JP' || v.lang === 'ja');
+                    const doSpeak = () => {
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        utterance.lang = 'ja-JP';
+                        utterance.rate = speechRate.value;
+                        utterance.volume = 1.0;
+                        const voice = getJaVoice();
+                        if (voice) utterance.voice = voice;
+                        window.speechSynthesis.speak(utterance);
+                    };
 
-                    let femaleVoice = null;
-                    for (const keyword of FEMALE_VOICE_PRIORITY) {
-                        femaleVoice = jaVoices.find(v => v.name.toLowerCase().includes(keyword));
-                        if (femaleVoice) break;
+                    // 若 voices 還沒載入，等 voiceschanged 後再說
+                    if (cachedVoices.length) {
+                        doSpeak();
+                    } else {
+                        const onReady = () => {
+                            loadVoices();
+                            window.speechSynthesis.removeEventListener('voiceschanged', onReady);
+                            doSpeak();
+                        };
+                        window.speechSynthesis.addEventListener('voiceschanged', onReady);
+                        // 若瀏覽器不觸發 voiceschanged（部分桌機 Safari），500ms 後強制執行
+                        setTimeout(() => {
+                            if (!cachedVoices.length) { loadVoices(); doSpeak(); }
+                        }, 500);
                     }
-                    const chosen = femaleVoice || jaVoices[0];
-                    if (chosen) utterance.voice = chosen;
-
-                    window.speechSynthesis.speak(utterance);
                 };
 
                 // 萬用句型完美阻斷渲染函數
@@ -756,16 +779,16 @@
                 };
 
                 // ======= 🎤 跟讀評分引擎 =======
-                let currentRec = null; // 保存 rec 實例供外部 abort
+                let currentRec = null;
 
-                const startShadowing = (targetText) => {
+                const startShadowing = (rawText) => {
                     if (!shadowingSupported.value) {
                         alert('您的瀏覽器不支援語音辨識，建議使用 Chrome 或桌機版 Safari。');
                         return;
                     }
-                    // 先停掉上一次還沒結束的錄音
                     if (currentRec) { try { currentRec.abort(); } catch {} currentRec = null; }
 
+                    const cleanText = cleanTextForAudio(rawText);
                     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                     const rec = new SpeechRecognition();
                     currentRec = rec;
@@ -773,7 +796,8 @@
                     rec.interimResults = false;
                     rec.maxAlternatives = 1;
 
-                    shadowingTarget.value = targetText;
+                    shadowingTargetRaw.value = rawText;   // 含標注，給 UI 顯示
+                    shadowingTarget.value = cleanText;     // 純文字，給評分比對
                     shadowingState.value = 'listening';
                     shadowingResult.value = '';
                     shadowingScore.value = 0;
@@ -781,7 +805,7 @@
                     rec.onresult = (e) => {
                         const heard = e.results[0][0].transcript.trim();
                         shadowingResult.value = heard;
-                        shadowingScore.value = calcShadowScore(targetText, heard);
+                        shadowingScore.value = calcShadowScore(cleanText, heard);
                         shadowingState.value = 'result';
                         try { rec.abort(); } catch {}
                         currentRec = null;
@@ -791,6 +815,8 @@
                         shadowingState.value = 'idle';
                         try { rec.abort(); } catch {}
                         currentRec = null;
+                        // 錄音結束後恢復 speechSynthesis
+                        window.speechSynthesis?.cancel();
                     };
                     rec.onend = () => {
                         if (shadowingState.value === 'listening') shadowingState.value = 'idle';
@@ -1003,7 +1029,7 @@
                     }, 
                     getMasteryStyle: (m) => m === '大師' ? 'bg-purple-100 text-purple-700' : m === '熟練' ? 'bg-green-100 text-green-700' : m === '不熟' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-400', 
                     submitAnswer, startRandomDialogue, startTargetedDialogue, exitDialogueSession, nextDialogue,
-                    shadowingState, shadowingTarget, shadowingResult, shadowingScore, shadowingSupported, startShadowing,
+                    shadowingState, shadowingTarget, shadowingTargetRaw, shadowingResult, shadowingScore, shadowingSupported, startShadowing,
                     isLoading, loadError
                 };
             }
