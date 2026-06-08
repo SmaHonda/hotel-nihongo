@@ -571,6 +571,9 @@
                     window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
                 }
 
+                // 女聲優先順序：iOS Kyoko → Windows Haruka → 名字含 female → 任意 ja-JP
+                const FEMALE_VOICE_PRIORITY = ['kyoko', 'haruka', 'female', 'woman'];
+
                 const speak = (text) => {
                     if (!('speechSynthesis' in window)) return;
                     window.speechSynthesis.cancel();
@@ -579,11 +582,16 @@
                     utterance.rate = speechRate.value;
 
                     const voices = cachedVoices.length ? cachedVoices : window.speechSynthesis.getVoices();
-                    const femaleVoice = voices.find(v =>
-                        v.lang === 'ja-JP' && /female|kyoko|haruka/i.test(v.name)
-                    ) || voices.find(v => v.lang === 'ja-JP');
+                    const jaVoices = voices.filter(v => v.lang === 'ja-JP' || v.lang === 'ja');
 
-                    if (femaleVoice) utterance.voice = femaleVoice;
+                    let femaleVoice = null;
+                    for (const keyword of FEMALE_VOICE_PRIORITY) {
+                        femaleVoice = jaVoices.find(v => v.name.toLowerCase().includes(keyword));
+                        if (femaleVoice) break;
+                    }
+                    const chosen = femaleVoice || jaVoices[0];
+                    if (chosen) utterance.voice = chosen;
+
                     window.speechSynthesis.speak(utterance);
                 };
 
@@ -703,13 +711,19 @@
                 };
 
                 // ======= 🎤 跟讀評分引擎 =======
+                let currentRec = null; // 保存 rec 實例供外部 abort
+
                 const startShadowing = (targetText) => {
                     if (!shadowingSupported.value) {
-                        alert('您的瀏覽器不支援語音辨識，建議使用 Chrome。');
+                        alert('您的瀏覽器不支援語音辨識，建議使用 Chrome 或桌機版 Safari。');
                         return;
                     }
+                    // 先停掉上一次還沒結束的錄音
+                    if (currentRec) { try { currentRec.abort(); } catch {} currentRec = null; }
+
                     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                     const rec = new SpeechRecognition();
+                    currentRec = rec;
                     rec.lang = 'ja-JP';
                     rec.interimResults = false;
                     rec.maxAlternatives = 1;
@@ -724,19 +738,36 @@
                         shadowingResult.value = heard;
                         shadowingScore.value = calcShadowScore(targetText, heard);
                         shadowingState.value = 'result';
+                        try { rec.abort(); } catch {}
+                        currentRec = null;
                     };
-                    rec.onerror = () => { shadowingState.value = 'idle'; };
+                    rec.onerror = (e) => {
+                        console.warn('SpeechRecognition error:', e.error);
+                        shadowingState.value = 'idle';
+                        try { rec.abort(); } catch {}
+                        currentRec = null;
+                    };
                     rec.onend = () => {
                         if (shadowingState.value === 'listening') shadowingState.value = 'idle';
+                        currentRec = null;
                     };
                     rec.start();
                 };
 
-                // 計算相似度（字元重疊比例）
+                // 正規化：去除標點、空格、振假名標記符號後再比對
+                const normalizeForScore = (text) => text
+                    .replace(/[\s\u3000]/g, '')           // 全半形空格
+                    .replace(/[。、！？!?,.，。！？「」『』【】()（）～〜・ー]/g, '') // 標點
+                    .replace(/\|/g, '')                   // 振假名分隔符
+                    .replace(/\[.*?\]/g, '')               // [ふりがな] 標記
+                    .toLowerCase();
+
+                // 計算相似度（字元重疊比例，正規化後比對）
                 const calcShadowScore = (target, heard) => {
                     if (!heard) return 0;
-                    const t = target.replace(/\s/g, '');
-                    const h = heard.replace(/\s/g, '');
+                    const t = normalizeForScore(target);
+                    const h = normalizeForScore(heard);
+                    if (!t.length) return 0;
                     let matches = 0;
                     const used = new Array(h.length).fill(false);
                     for (const ch of t) {
